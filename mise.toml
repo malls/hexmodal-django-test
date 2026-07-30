@@ -1,0 +1,13 @@
+[tools]
+python = "3.14"
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+# BuildKit is required for --platform to be honored; the legacy builder silently
+# ignores it and produces host-arch images that compose then refuses to run.
+DOCKER_BUILDKIT = "1"
+COMPOSE_DOCKER_CLI_BUILD = "1"
+
+# Set DOCKER_DEFAULT_PLATFORM in mise.local.toml (gitignored) if your shell
+# exports a platform that doesn't match your Docker daemon. See README.

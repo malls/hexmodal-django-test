@@ -1,3 +1,4 @@
+# AI written
 services:
   db:
     image: postgres:16-alpine
@@ -15,27 +16,9 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-
-  rabbitmq:
-    image: rabbitmq:4-management
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-
   web:
     build:
-      context: .
+      context: ./app
       dockerfile: Dockerfile
     command: python manage.py runserver 0.0.0.0:8000
     environment:
@@ -47,17 +30,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hexmodal}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672//
     volumes:
-      - .:/app
+      - ./app:/app
     ports:
       - "${DJANGO_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
 
 volumes:
   postgres_data:
-  rabbitmq_data:

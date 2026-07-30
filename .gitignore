@@ -1,5 +1,8 @@
+# AI
+
 # Local environment — never commit real credentials
 .env
+agents.md
 
 # Python
 __pycache__/
@@ -12,6 +15,9 @@ venv/
 *.sqlite3
 /staticfiles/
 /media/
+
+# Machine-specific mise overrides
+mise.local.toml
 
 # Tooling caches
 .pytest_cache/
