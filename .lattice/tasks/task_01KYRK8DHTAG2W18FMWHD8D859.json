@@ -1,26 +1,32 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": "low",
   "created_at": "2026-07-30T04:06:56Z",
   "created_by": "human:forrest",
   "custom_fields": {},
   "description": "docker-compose.yml already passes DJANGO_SECRET_KEY and DJANGO_DEBUG to the web container, but app/config/settings.py hardcodes SECRET_KEY (line 24) and DEBUG = True (line 27), so both env vars are silently ignored. Wire them up following the exact pattern HDT-3 (POSTGRES_*) and HDT-4 (DJANGO_ALLOWED_HOSTS) established: os.environ.get with a dev-safe default. SECRET_KEY default = the current insecure dev key (keeps fresh clones working with zero setup); DEBUG parses DJANGO_DEBUG truthily \u2014 compose and .env.example use '1'/'0', so define the parse rule explicitly (e.g. value in ('1','true','yes') case-insensitive) and keep default True for dev. Requested directly by Forrest during the README audit; the audit finding is recorded in the previous session summary.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-07-30T04:11:29Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KYRKGGJX6XHKZGHR2PC96DZD",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
   "id": "task_01KYRK8DHTAG2W18FMWHD8D859",
-  "last_event_id": "ev_01KYRKAGJ76QYYTWQRBABG061Q",
-  "last_status_changed_at": "2026-07-30T04:08:05Z",
+  "last_event_id": "ev_01KYRKGQPM50140PVTJB8RMNHR",
+  "last_status_changed_at": "2026-07-30T04:11:29Z",
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "HDT-9",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Wire SECRET_KEY and DEBUG to DJANGO_SECRET_KEY/DJANGO_DEBUG env vars",
   "type": "task",
-  "updated_at": "2026-07-30T04:08:05Z",
+  "updated_at": "2026-07-30T04:11:29Z",
   "urgency": null
 }
