@@ -16,8 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from telemetry.views import DevicesSearchView, DeviceDetailView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/payloads/', include('telemetry.urls')),
+    path('devices/', DevicesSearchView.as_view(), name='devices-search'),
+    path('devices/<int:device_id>/detail/', DeviceDetailView.as_view(), name='device-detail'),
 ]
