@@ -3,3 +3,4 @@
 {"actor":"agent:claude-haiku-4-5","data":{"from":"backlog","to":"in_planning"},"id":"ev_01KYT8BES8MS5D9SBBCAW7BW4N","schema_version":1,"task_id":"task_01KYT7QRHT42YA566NG2ETRSW5","ts":"2026-07-30T19:34:50Z","type":"status_changed"}
 {"actor":"agent:claude-haiku-4-5","data":{"from":"in_planning","to":"planned"},"id":"ev_01KYT8CHHW676YY55R4GYBQ8RJ","schema_version":1,"task_id":"task_01KYT7QRHT42YA566NG2ETRSW5","ts":"2026-07-30T19:35:26Z","type":"status_changed"}
 {"actor":"agent:claude-haiku-4-5","data":{"from":"planned","to":"in_progress"},"id":"ev_01KYT8CMEH9X92KGJ76B7FQDBE","schema_version":1,"task_id":"task_01KYT7QRHT42YA566NG2ETRSW5","ts":"2026-07-30T19:35:29Z","type":"status_changed"}
+{"actor":"agent:claude-haiku-4-5","data":{"from":"in_progress","to":"review"},"id":"ev_01KYT8HD12KWWWMYC2VSZFJQMK","schema_version":1,"task_id":"task_01KYT7QRHT42YA566NG2ETRSW5","ts":"2026-07-30T19:38:05Z","type":"status_changed"}

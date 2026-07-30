@@ -4,8 +4,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Device, Payload
-from .serializers import PayloadIngestSerializer, DeviceDetailSerializer, DeviceListSerializer
+from .models import Device, Payload, DeviceHealthConfig
+from .serializers import (
+    PayloadIngestSerializer,
+    DeviceDetailSerializer,
+    DeviceListSerializer,
+    DeviceHealthConfigSerializer,
+)
 from .services import decode_payload, extract_received_at
 
 
@@ -102,3 +107,16 @@ class DeviceViewSet(viewsets.ReadOnlyModelViewSet):
                 failures__resolved_at__isnull=True
             ).distinct()
         return queryset
+
+
+class DeviceHealthConfigViewSet(viewsets.ModelViewSet):
+    queryset = DeviceHealthConfig.objects.all()
+    serializer_class = DeviceHealthConfigSerializer
+    ordering_fields = ['created_at', 'updated_at']
+    ordering = ['-updated_at']
+
+    def get_queryset(self):
+        device_id = self.request.query_params.get('device_id')
+        if device_id:
+            return self.queryset.filter(device_id=device_id)
+        return self.queryset

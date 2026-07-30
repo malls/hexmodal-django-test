@@ -6,7 +6,7 @@ from rest_framework import status as http_status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
-from .models import Device, Payload, Status, DeviceFailure
+from .models import Device, Payload, Status, DeviceFailure, DeviceHealthConfig
 
 
 def example_body():
@@ -318,5 +318,132 @@ class DeviceDetailTests(APITestCase):
         url = reverse('telemetry:device-detail', kwargs={'pk': device.pk})
         self.client.credentials()
         response = self.client.get(url)
+
+        self.assertEqual(response.status_code, http_status.HTTP_401_UNAUTHORIZED)
+
+
+class DeviceHealthConfigTests(APITestCase):
+    def setUp(self):
+        self.url = reverse('telemetry:health-config-list')
+        user = User.objects.create_user(username='admin', password='x')
+        token = Token.objects.create(user=user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+        self.device = Device.objects.create(dev_eui='device1')
+
+    def test_create_config_with_defaults(self):
+        data = {'device': self.device.id}
+        response = self.client.post(self.url, data, format='json')
+
+        self.assertEqual(response.status_code, http_status.HTTP_201_CREATED)
+        config = DeviceHealthConfig.objects.get(device=self.device)
+        self.assertEqual(config.inactivity_window_seconds, 3600)
+        self.assertEqual(config.temp_min, -10.0)
+        self.assertEqual(config.temp_max, 50.0)
+        self.assertEqual(config.humidity_min, 0.0)
+        self.assertEqual(config.humidity_max, 100.0)
+        self.assertEqual(config.expected_frequency_seconds, 600)
+
+    def test_create_config_with_custom_values(self):
+        data = {
+            'device': self.device.id,
+            'inactivity_window_seconds': 7200,
+            'temp_min': 10.0,
+            'temp_max': 30.0,
+            'humidity_min': 20.0,
+            'humidity_max': 80.0,
+            'expected_frequency_seconds': 300,
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        self.assertEqual(response.status_code, http_status.HTTP_201_CREATED)
+        config = DeviceHealthConfig.objects.get(device=self.device)
+        self.assertEqual(config.inactivity_window_seconds, 7200)
+        self.assertEqual(config.temp_min, 10.0)
+        self.assertEqual(config.temp_max, 30.0)
+
+    def test_update_config(self):
+        config = DeviceHealthConfig.objects.create(device=self.device)
+        url = reverse('telemetry:health-config-detail', kwargs={'pk': config.pk})
+        data = {'temp_max': 60.0, 'expected_frequency_seconds': 450}
+        response = self.client.patch(url, data, format='json')
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        config.refresh_from_db()
+        self.assertEqual(config.temp_max, 60.0)
+        self.assertEqual(config.expected_frequency_seconds, 450)
+
+    def test_list_configs(self):
+        dev2 = Device.objects.create(dev_eui='device2')
+        DeviceHealthConfig.objects.create(device=self.device)
+        DeviceHealthConfig.objects.create(device=dev2)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        results = response.json()['results']
+        self.assertEqual(len(results), 2)
+
+    def test_filter_by_device(self):
+        dev2 = Device.objects.create(dev_eui='device2')
+        DeviceHealthConfig.objects.create(device=self.device)
+        DeviceHealthConfig.objects.create(device=dev2)
+        response = self.client.get(f'{self.url}?device_id={self.device.id}')
+
+        results = response.json()['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['device'], self.device.id)
+
+    def test_validation_temp_min_max(self):
+        data = {
+            'device': self.device.id,
+            'temp_min': 50.0,
+            'temp_max': 10.0,  # Invalid: min > max
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+        self.assertIn('temp_min', str(response.json()))
+
+    def test_validation_humidity_min_max(self):
+        data = {
+            'device': self.device.id,
+            'humidity_min': 80.0,
+            'humidity_max': 20.0,  # Invalid: min > max
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+        self.assertIn('humidity_min', str(response.json()))
+
+    def test_validation_inactivity_positive(self):
+        data = {
+            'device': self.device.id,
+            'inactivity_window_seconds': -100,  # Invalid: negative
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+
+    def test_validation_frequency_positive(self):
+        data = {
+            'device': self.device.id,
+            'expected_frequency_seconds': 0,  # Invalid: must be positive
+        }
+        response = self.client.post(self.url, data, format='json')
+
+        self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+
+    def test_retrieve_config(self):
+        config = DeviceHealthConfig.objects.create(device=self.device)
+        url = reverse('telemetry:health-config-detail', kwargs={'pk': config.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data['device'], self.device.id)
+        self.assertEqual(data['inactivity_window_seconds'], 3600)
+
+    def test_unauthenticated_rejected(self):
+        self.client.credentials()
+        response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, http_status.HTTP_401_UNAUTHORIZED)

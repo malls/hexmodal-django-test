@@ -24,7 +24,6 @@ class Device(models.Model):
     # shape — into the ingest endpoint before it is written. That is a seam for
     # whoever builds the serializer.
     dev_eui = models.CharField(max_length=16, unique=True)
-    acceptedRanges = models.JSONField(default=dict, blank=True)
     latest_status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.UNKNOWN
     )
@@ -33,6 +32,27 @@ class Device(models.Model):
 
     def __str__(self):
         return self.dev_eui
+
+
+class DeviceHealthConfig(models.Model):
+    device = models.OneToOneField(
+        'Device', on_delete=models.CASCADE, related_name='health_config'
+    )
+    inactivity_window_seconds = models.IntegerField(default=3600)
+    temp_min = models.FloatField(default=-10.0)
+    temp_max = models.FloatField(default=50.0)
+    humidity_min = models.FloatField(default=0.0)
+    humidity_max = models.FloatField(default=100.0)
+    expected_frequency_seconds = models.IntegerField(default=600)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Device Health Configuration'
+        verbose_name_plural = 'Device Health Configurations'
+
+    def __str__(self):
+        return f'{self.device.dev_eui} health config'
 
 
 class DeviceFailure(models.Model):

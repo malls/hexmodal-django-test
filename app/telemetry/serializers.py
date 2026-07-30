@@ -3,7 +3,7 @@ import binascii
 
 from rest_framework import serializers
 
-from .models import Device, DeviceFailure, Payload
+from .models import Device, DeviceFailure, Payload, DeviceHealthConfig
 
 
 class PayloadIngestSerializer(serializers.Serializer):
@@ -75,3 +75,32 @@ class DeviceDetailSerializer(serializers.ModelSerializer):
     def get_failures(self, obj):
         active_failures = obj.failures.filter(resolved_at__isnull=True)
         return DeviceFailureSerializer(active_failures, many=True).data
+
+
+class DeviceHealthConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeviceHealthConfig
+        fields = (
+            'id',
+            'device',
+            'inactivity_window_seconds',
+            'temp_min',
+            'temp_max',
+            'humidity_min',
+            'humidity_max',
+            'expected_frequency_seconds',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+    def validate(self, data):
+        if data.get('temp_min', 0) > data.get('temp_max', 0):
+            raise serializers.ValidationError('temp_min must be less than temp_max')
+        if data.get('humidity_min', 0) > data.get('humidity_max', 0):
+            raise serializers.ValidationError('humidity_min must be less than humidity_max')
+        if data.get('inactivity_window_seconds', 0) <= 0:
+            raise serializers.ValidationError('inactivity_window_seconds must be positive')
+        if data.get('expected_frequency_seconds', 0) <= 0:
+            raise serializers.ValidationError('expected_frequency_seconds must be positive')
+        return data
