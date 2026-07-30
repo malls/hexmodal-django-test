@@ -129,14 +129,21 @@ async function fetchDeviceList() {
             credentials: 'include'  // Send session cookie
         });
 
-        console.log('API Response status:', response.status, 'URL:', url);
-
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        const data = await response.json();
-        console.log('API Response data:', data);
+        let data = await response.json();
+
+        // Handle both paginated and direct array responses
+        if (Array.isArray(data)) {
+            data = {
+                count: data.length,
+                results: data,
+                next: null,
+                previous: null
+            };
+        }
 
         if (loading) loading.classList.add('hidden');
         if (listSection) listSection.classList.remove('hidden');
@@ -158,7 +165,6 @@ async function fetchDeviceList() {
  * Render device list table
  */
 function renderDeviceList(data) {
-    console.log('renderDeviceList called with:', data);
     const tbody = document.getElementById('device-table-body');
     const emptyState = document.getElementById('empty-state');
     const pageStart = document.getElementById('page-start');
@@ -172,7 +178,6 @@ function renderDeviceList(data) {
     totalCountEl.textContent = totalCount;
 
     if (!data.results || data.results.length === 0) {
-        console.log('No results, showing empty state');
         tbody.innerHTML = '';
         emptyState.classList.remove('hidden');
         prevBtn.disabled = true;
@@ -180,7 +185,6 @@ function renderDeviceList(data) {
         return;
     }
 
-    console.log('Rendering', data.results.length, 'devices');
     emptyState.classList.add('hidden');
 
     // Calculate pagination info
