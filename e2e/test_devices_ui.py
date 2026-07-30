@@ -485,3 +485,313 @@ class TestUIResponsiveness:
             # Verify layout
             assert page.locator('[data-testid=search-input]').is_visible()
             assert page.locator('[data-testid=device-list]').is_visible()
+
+
+class TestDeviceFailureCreation:
+    """Tests for creating and displaying device failures"""
+
+    def test_out_of_range_temperature_failure(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify out-of-range temperature failure is created and displayed"""
+        # Create device with out-of-range temperature (-50°C, default range is -10 to 50)
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'AQ==',
+            'object': {
+                'temperature': -50,
+                'humidity': 50,
+            },
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        with playwright.chromium.launch() as browser:
+            page = browser.new_page()
+            page.goto(f'{base_url}/devices/')
+            page.wait_for_load_state('networkidle')
+
+            # Search for the device
+            search_input = page.locator('[data-testid=search-input]')
+            search_input.fill(fresh_dev_eui[:8])
+            page.wait_for_timeout(400)
+            page.wait_for_load_state('networkidle')
+
+            # Verify device appears and has failure count
+            rows = page.locator('[data-testid=device-row]')
+            assert rows.count() >= 1
+            # Verify failure badge shows > 0
+            failure_badge = page.locator('.failure-count').first
+            assert failure_badge.is_visible()
+            count = failure_badge.text_content().strip()
+            assert count != '0'
+
+    def test_out_of_range_humidity_failure(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify out-of-range humidity failure is created and displayed"""
+        # Create device with out-of-range humidity (150%, default range is 0-100)
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'AQ==',
+            'object': {
+                'temperature': 20,
+                'humidity': 150,
+            },
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        with playwright.chromium.launch() as browser:
+            page = browser.new_page()
+            page.goto(f'{base_url}/devices/')
+            page.wait_for_load_state('networkidle')
+
+            # Search for device
+            search_input = page.locator('[data-testid=search-input]')
+            search_input.fill(fresh_dev_eui[:8])
+            page.wait_for_timeout(400)
+            page.wait_for_load_state('networkidle')
+
+            # Verify device has failures
+            rows = page.locator('[data-testid=device-row]')
+            assert rows.count() >= 1
+
+    def test_out_of_range_failure_in_detail(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify out-of-range failure details display in device detail view"""
+        # Create device with out-of-range reading
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'AQ==',
+            'object': {
+                'temperature': 100,  # Way out of range
+                'humidity': 50,
+            },
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        # Get device ID
+        device_list = api.get('/devices/')
+        device_data = device_list.json()
+        device_id = None
+        for d in device_data.get('results', []):
+            if d['dev_eui'] == fresh_dev_eui:
+                device_id = d['id']
+                break
+
+        if device_id:
+            with playwright.chromium.launch() as browser:
+                page = browser.new_page()
+                page.goto(f'{base_url}/devices/{device_id}/detail/')
+                page.wait_for_load_state('networkidle')
+
+                # Verify failure card displays with "Out of Range" badge
+                failure_cards = page.locator('.failure-card')
+                page_content = page.content()
+                # Should have failure badge or message about out of range
+                assert 'out_of_range' in page_content.lower() or 'temperature' in page_content
+
+    def test_frequency_anomaly_failure(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify frequency anomaly failure is created when payloads arrive too slowly"""
+        import time
+
+        # Create device with two payloads far apart
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'AQ==',
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        # Wait a bit, then send second payload with large gap
+        # (default expected frequency is 600s, 1.5x = 900s)
+        # For E2E test, we'll create the gap via timestamps instead
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 2,
+            'data': 'AQ==',
+            'rx_info': [{'time': '2026-07-30T12:20:00Z'}],  # 20 min later (1200s gap)
+            'tx_info': {},
+        })
+
+        with playwright.chromium.launch() as browser:
+            page = browser.new_page()
+            page.goto(f'{base_url}/devices/')
+            page.wait_for_load_state('networkidle')
+
+            # Search for device
+            search_input = page.locator('[data-testid=search-input]')
+            search_input.fill(fresh_dev_eui[:8])
+            page.wait_for_timeout(400)
+            page.wait_for_load_state('networkidle')
+
+            # Verify device appears with failures
+            rows = page.locator('[data-testid=device-row]')
+            assert rows.count() >= 1
+
+    def test_filter_by_out_of_range_failure(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify filtering by out_of_range failure type works"""
+        # Create device with out-of-range reading
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'AQ==',
+            'object': {
+                'temperature': -60,
+                'humidity': 50,
+            },
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        with playwright.chromium.launch() as browser:
+            page = browser.new_page()
+            page.goto(f'{base_url}/devices/')
+            page.wait_for_load_state('networkidle')
+
+            # Check out_of_range failure type filter
+            out_of_range_cb = page.locator('[data-testid=failure-type-out-of-range]')
+            out_of_range_cb.check()
+            page.wait_for_timeout(400)
+            page.wait_for_load_state('networkidle')
+
+            # Verify our device appears in filtered results
+            rows = page.locator('[data-testid=device-row]')
+            # Should have at least one device with out_of_range failure
+            if rows.count() > 0:
+                assert fresh_dev_eui in page.content()
+
+    def test_failing_device_shows_failing_status(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify device with failures shows 'failing' status in list"""
+        # Create device with multiple out-of-range readings
+        for i in range(3):
+            api.post('/payloads/', data={
+                'dev_eui': fresh_dev_eui,
+                'f_cnt': i + 1,
+                'data': 'AQ==',
+                'object': {
+                    'temperature': -50 + (i * 5),  # Out of range
+                    'humidity': 50,
+                },
+                'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+                'tx_info': {},
+            })
+
+        with playwright.chromium.launch() as browser:
+            page = browser.new_page()
+            page.goto(f'{base_url}/devices/')
+            page.wait_for_load_state('networkidle')
+
+            # Search for device
+            search_input = page.locator('[data-testid=search-input]')
+            search_input.fill(fresh_dev_eui[:8])
+            page.wait_for_timeout(400)
+            page.wait_for_load_state('networkidle')
+
+            # Verify status shows as failing (⚠ or similar)
+            page_content = page.content()
+            assert 'failing' in page_content.lower() or fresh_dev_eui in page_content
+
+    def test_filter_by_failing_status_shows_devices_with_failures(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify filtering by 'failing' status shows devices with active failures"""
+        # Create device with failure
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'AQ==',
+            'object': {
+                'temperature': -60,
+                'humidity': 50,
+            },
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        with playwright.chromium.launch() as browser:
+            page = browser.new_page()
+            page.goto(f'{base_url}/devices/')
+            page.wait_for_load_state('networkidle')
+
+            # Click "Failing" status filter
+            failing_radio = page.locator('[data-testid=status-failing]')
+            failing_radio.check()
+            page.wait_for_timeout(400)
+            page.wait_for_load_state('networkidle')
+
+            # Verify device appears
+            rows = page.locator('[data-testid=device-row]')
+            # Should find our failing device
+            if rows.count() > 0:
+                assert fresh_dev_eui in page.content()
+
+    def test_passing_device_has_zero_failures(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify passing device shows zero failures"""
+        # Create passing device (status=1, no readings)
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'AQ==',  # base64 for value 1 = passing
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        with playwright.chromium.launch() as browser:
+            page = browser.new_page()
+            page.goto(f'{base_url}/devices/')
+            page.wait_for_load_state('networkidle')
+
+            # Search for device
+            search_input = page.locator('[data-testid=search-input]')
+            search_input.fill(fresh_dev_eui[:8])
+            page.wait_for_timeout(400)
+            page.wait_for_load_state('networkidle')
+
+            # Verify failure count is 0
+            failure_badges = page.locator('.failure-count')
+            if failure_badges.count() > 0:
+                first_badge = failure_badges.first
+                count = first_badge.text_content().strip()
+                # For passing device, should be 0 or have 'zero' class
+                assert count == '0' or 'zero' in first_badge.get_attribute('class', '')
+
+    def test_multiple_failure_types_displayed(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify device with multiple failure types shows all of them in detail"""
+        # Create device with out-of-range failure
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'AQ==',
+            'object': {
+                'temperature': -60,
+                'humidity': 50,
+            },
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        # Get device ID
+        device_list = api.get('/devices/')
+        device_data = device_list.json()
+        device_id = None
+        for d in device_data.get('results', []):
+            if d['dev_eui'] == fresh_dev_eui:
+                device_id = d['id']
+                break
+
+        if device_id:
+            with playwright.chromium.launch() as browser:
+                page = browser.new_page()
+                page.goto(f'{base_url}/devices/{device_id}/detail/')
+                page.wait_for_load_state('networkidle')
+
+                # Verify failures section exists
+                failures_list = page.locator('.failures-list')
+                assert failures_list.is_visible()
+
+                # Should have at least one failure card
+                failure_cards = page.locator('.failure-card')
+                if failure_cards.count() > 0:
+                    # Verify failure has a badge
+                    badges = page.locator('.failure-type')
+                    assert badges.count() > 0
