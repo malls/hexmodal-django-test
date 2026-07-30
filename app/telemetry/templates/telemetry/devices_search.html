@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Health Monitor</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'telemetry/css/devices.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Device Health Monitor</h1>
+        </header>
+
+        <main class="main-content">
+            <!-- Search and Filter Section -->
+            <section class="search-section">
+                <div class="search-box">
+                    <input
+                        type="text"
+                        id="search-input"
+                        class="search-input"
+                        placeholder="Search by device ID..."
+                        data-testid="search-input"
+                        aria-label="Search devices"
+                    >
+                    <button class="clear-btn" id="clear-search" title="Clear search">×</button>
+                </div>
+
+                <div class="filters-section">
+                    <div class="filter-group">
+                        <label class="filter-label">Filter by Status:</label>
+                        <div class="filter-options">
+                            <label class="checkbox">
+                                <input type="radio" name="status" value="" checked data-testid="status-all">
+                                <span>All</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="radio" name="status" value="passing" data-testid="status-passing">
+                                <span>Passing</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="radio" name="status" value="failing" data-testid="status-failing">
+                                <span>Failing</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">Filter by Failure Type:</label>
+                        <div class="filter-options">
+                            <label class="checkbox">
+                                <input type="checkbox" name="failure_type" value="inactivity" data-testid="failure-type-inactivity">
+                                <span>Inactivity</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" name="failure_type" value="out_of_range" data-testid="failure-type-out-of-range">
+                                <span>Out of Range</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" name="failure_type" value="frequency_anomaly" data-testid="failure-type-frequency">
+                                <span>Frequency Anomaly</span>
+                            </label>
+                            <button class="clear-filters-btn" id="clear-filters" title="Clear all filters">Show all</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Loading and Error States -->
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Loading devices...</p>
+            </div>
+
+            <div id="error" class="error hidden" role="alert">
+                <p id="error-message"></p>
+                <button class="retry-btn">Retry</button>
+            </div>
+
+            <!-- Device List Table -->
+            <section id="device-list-section" class="device-list-section hidden">
+                <table class="device-table" data-testid="device-list">
+                    <thead>
+                        <tr>
+                            <th>
+                                <button class="sort-btn" data-column="dev_eui">
+                                    Device ID
+                                    <span class="sort-indicator"></span>
+                                </button>
+                            </th>
+                            <th>
+                                <button class="sort-btn" data-column="latest_status">
+                                    Status
+                                    <span class="sort-indicator"></span>
+                                </button>
+                            </th>
+                            <th>Failures</th>
+                            <th>
+                                <button class="sort-btn" data-column="updated_at">
+                                    Last Activity
+                                    <span class="sort-indicator"></span>
+                                </button>
+                            </th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="device-table-body">
+                    </tbody>
+                </table>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="empty-state hidden">
+                    <p>No devices match your search.</p>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination">
+                    <p class="pagination-info">
+                        Showing <span id="page-start">1</span>-<span id="page-end">20</span> of <span id="total-count">0</span> devices
+                    </p>
+                    <div class="pagination-controls">
+                        <button class="pagination-btn" id="prev-btn" disabled>← Prev</button>
+                        <span class="page-info" id="page-info">Page 1</span>
+                        <button class="pagination-btn" id="next-btn" disabled>Next →</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{% static 'telemetry/js/devices-search.js' %}"></script>
+</body>
+</html>

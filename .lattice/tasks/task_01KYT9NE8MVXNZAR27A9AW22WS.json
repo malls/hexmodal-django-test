@@ -1,26 +1,32 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-07-30T19:57:46Z",
   "created_by": "agent:claude-haiku",
   "custom_fields": {},
   "description": null,
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-07-30T19:58:59Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KYT9QKY4RPRND5K9CPANP0AP",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
   "id": "task_01KYT9NE8MVXNZAR27A9AW22WS",
-  "last_event_id": "ev_01KYT9PAWCFT3T8S33DHZX5R11",
-  "last_status_changed_at": "2026-07-30T19:58:15Z",
+  "last_event_id": "ev_01KYT9QNM218SX3A5D1SJQ4AYM",
+  "last_status_changed_at": "2026-07-30T19:58:59Z",
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "HDT-17",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "HDT-15: API Enhancements for Search/Filter (HDT-16 dependency)",
   "type": "task",
-  "updated_at": "2026-07-30T19:58:15Z",
+  "updated_at": "2026-07-30T19:58:59Z",
   "urgency": null
 }

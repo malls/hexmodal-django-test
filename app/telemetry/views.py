@@ -1,4 +1,5 @@
 from django.db import IntegrityError, transaction
+from django.views.generic import TemplateView
 from rest_framework import status as http_status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter
@@ -128,3 +129,16 @@ class DeviceHealthConfigViewSet(viewsets.ModelViewSet):
         if device_id:
             return self.queryset.filter(device_id=device_id)
         return self.queryset
+
+
+class DevicesSearchView(TemplateView):
+    template_name = 'telemetry/devices_search.html'
+
+
+class DeviceDetailView(TemplateView):
+    template_name = 'telemetry/device_detail.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['device_id'] = kwargs.get('device_id')
+        return context

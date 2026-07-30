@@ -199,3 +199,5 @@ lattice list
 - `lattice link <task> subtask_of|depends_on|blocks <target>` — task relationships
 
 For the full CLI reference, see the `/lattice` skill.
+
+All styles and CSS must adhere to BRANDING.md

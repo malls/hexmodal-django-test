@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Detail</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'telemetry/css/devices.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="{% url 'telemetry:devices-search' %}" class="back-link">← Back to Devices</a>
+            <h1 id="device-title">Device</h1>
+        </header>
+
+        <main class="main-content">
+            <!-- Loading and Error States -->
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading device...</p>
+            </div>
+
+            <div id="error" class="error hidden" role="alert">
+                <p id="error-message"></p>
+                <a href="{% url 'telemetry:devices-search' %}" class="retry-btn">Back to Devices</a>
+            </div>
+
+            <!-- Device Detail Section -->
+            <section id="device-section" class="device-section hidden">
+                <!-- Device Header -->
+                <div class="device-header">
+                    <div>
+                        <h2 id="device-name">Device</h2>
+                        <div class="device-meta">
+                            <span id="device-id" class="device-id">-</span>
+                            <button class="copy-btn" id="copy-btn" title="Copy device ID">📋</button>
+                        </div>
+                    </div>
+                    <div id="status-badge" class="status-badge">Unknown</div>
+                </div>
+
+                <!-- Overview Section -->
+                <section class="detail-section">
+                    <h3>Overview</h3>
+                    <div class="overview-grid">
+                        <div class="overview-item">
+                            <span class="label">Status:</span>
+                            <span id="status-text" class="value">-</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="label">Created:</span>
+                            <span id="created-date" class="value">-</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="label">Last Activity:</span>
+                            <span id="last-activity" class="value">-</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="label">Latest Status:</span>
+                            <span id="latest-status" class="value">-</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Active Failures Section -->
+                <section class="detail-section">
+                    <h3>Active Failures</h3>
+                    <div id="failures-list" class="failures-list">
+                    </div>
+                    <div id="no-failures" class="empty-message hidden">
+                        This device has no active failures.
+                    </div>
+                </section>
+
+                <!-- Health Configuration Section -->
+                <section class="detail-section">
+                    <h3>Health Configuration</h3>
+                    <div class="config-grid">
+                        <div class="config-item">
+                            <span class="label">Inactivity Window:</span>
+                            <span id="config-inactivity" class="value">-</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="label">Temperature Range:</span>
+                            <span id="config-temp" class="value">-</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="label">Humidity Range:</span>
+                            <span id="config-humidity" class="value">-</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="label">Expected Frequency:</span>
+                            <span id="config-frequency" class="value">-</span>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const deviceId = {{ device_id }};
+    </script>
+    <script src="{% static 'telemetry/js/devices-search.js' %}"></script>
+</body>
+</html>
