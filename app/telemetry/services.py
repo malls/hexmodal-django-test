@@ -49,6 +49,64 @@ def extract_received_at(rx_info):
     return parsed
 
 
+def check_payload_out_of_range(payload):
+    """Flag if payload readings exceed configured ranges for device.
+
+    Checks temperature and humidity against DeviceHealthConfig bounds.
+    Creates out_of_range failure once when readings go out, resolves when
+    readings return to normal. Returns True if out of range, False otherwise.
+    """
+    device = payload.device
+    config, _ = DeviceHealthConfig.objects.get_or_create(device=device)
+    readings = payload.object or {}
+
+    temp = readings.get('temperature')
+    humidity = readings.get('humidity')
+
+    out_of_range_fields = []
+    is_out_of_range = False
+
+    if temp is not None:
+        if not (config.temp_min <= temp <= config.temp_max):
+            is_out_of_range = True
+            out_of_range_fields.append('temperature')
+
+    if humidity is not None:
+        if not (config.humidity_min <= humidity <= config.humidity_max):
+            is_out_of_range = True
+            out_of_range_fields.append('humidity')
+
+    has_active_failure = device.failures.filter(
+        failure_type='out_of_range',
+        resolved_at__isnull=True
+    ).exists()
+
+    if is_out_of_range and not has_active_failure:
+        DeviceFailure.objects.create(
+            device=device,
+            failure_type='out_of_range',
+            details={
+                'out_of_range_fields': out_of_range_fields,
+                'temperature': temp,
+                'humidity': humidity,
+                'config': {
+                    'temp_min': config.temp_min,
+                    'temp_max': config.temp_max,
+                    'humidity_min': config.humidity_min,
+                    'humidity_max': config.humidity_max,
+                },
+                'payload_id': payload.id,
+            }
+        )
+    elif not is_out_of_range and has_active_failure:
+        device.failures.filter(
+            failure_type='out_of_range',
+            resolved_at__isnull=True
+        ).update(resolved_at=timezone.now())
+
+    return is_out_of_range
+
+
 def check_device_inactivity():
     """Flag devices with no payload in configured inactivity window.
 

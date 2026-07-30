@@ -7,7 +7,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from .models import Device, Payload, Status, DeviceFailure, DeviceHealthConfig
-from .services import check_device_inactivity
+from .services import check_device_inactivity, check_payload_out_of_range
 
 
 def example_body():
@@ -575,3 +575,203 @@ class InactivityDetectionTests(APITestCase):
         self.assertIn('last_payload_time', failure.details)
         self.assertIn('checked_at', failure.details)
         self.assertIn('inactivity_window_seconds', failure.details)
+
+
+class OutOfRangeDetectionTests(APITestCase):
+    def setUp(self):
+        self.device = Device.objects.create(dev_eui='device1')
+        self.config = DeviceHealthConfig.objects.create(
+            device=self.device,
+            temp_min=15.0,
+            temp_max=25.0,
+            humidity_min=30.0,
+            humidity_max=70.0,
+        )
+
+    def test_flag_temperature_too_high(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 30.0, 'humidity': 50.0},
+        )
+
+        check_payload_out_of_range(payload)
+
+        failure = self.device.failures.get()
+        self.assertEqual(failure.failure_type, 'out_of_range')
+        self.assertIn('temperature', failure.details['out_of_range_fields'])
+        self.assertEqual(failure.details['temperature'], 30.0)
+
+    def test_flag_temperature_too_low(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 10.0, 'humidity': 50.0},
+        )
+
+        check_payload_out_of_range(payload)
+
+        failure = self.device.failures.get()
+        self.assertIn('temperature', failure.details['out_of_range_fields'])
+        self.assertEqual(failure.details['temperature'], 10.0)
+
+    def test_flag_humidity_too_high(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 20.0, 'humidity': 80.0},
+        )
+
+        check_payload_out_of_range(payload)
+
+        failure = self.device.failures.get()
+        self.assertIn('humidity', failure.details['out_of_range_fields'])
+        self.assertEqual(failure.details['humidity'], 80.0)
+
+    def test_flag_humidity_too_low(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 20.0, 'humidity': 20.0},
+        )
+
+        check_payload_out_of_range(payload)
+
+        failure = self.device.failures.get()
+        self.assertIn('humidity', failure.details['out_of_range_fields'])
+        self.assertEqual(failure.details['humidity'], 20.0)
+
+    def test_flag_both_temp_and_humidity_out_of_range(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 30.0, 'humidity': 80.0},
+        )
+
+        check_payload_out_of_range(payload)
+
+        failure = self.device.failures.get()
+        self.assertEqual(len(failure.details['out_of_range_fields']), 2)
+        self.assertIn('temperature', failure.details['out_of_range_fields'])
+        self.assertIn('humidity', failure.details['out_of_range_fields'])
+
+    def test_no_flag_when_readings_in_range(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 20.0, 'humidity': 50.0},
+        )
+
+        check_payload_out_of_range(payload)
+
+        self.assertEqual(self.device.failures.count(), 0)
+
+    def test_resolve_out_of_range_when_readings_return_to_normal(self):
+        payload1 = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 30.0, 'humidity': 50.0},
+        )
+        check_payload_out_of_range(payload1)
+        self.assertEqual(len(self.device.failures.filter(resolved_at__isnull=True)), 1)
+
+        payload2 = Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            object={'temperature': 20.0, 'humidity': 50.0},
+        )
+        check_payload_out_of_range(payload2)
+
+        failure = self.device.failures.get()
+        self.assertIsNotNone(failure.resolved_at)
+
+    def test_idempotent_no_duplicate_failures(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 30.0, 'humidity': 50.0},
+        )
+
+        check_payload_out_of_range(payload)
+        check_payload_out_of_range(payload)
+        check_payload_out_of_range(payload)
+
+        self.assertEqual(self.device.failures.count(), 1)
+
+    def test_ignore_missing_temperature(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'humidity': 50.0},
+        )
+
+        result = check_payload_out_of_range(payload)
+
+        self.assertFalse(result)
+        self.assertEqual(self.device.failures.count(), 0)
+
+    def test_ignore_missing_humidity(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 20.0},
+        )
+
+        result = check_payload_out_of_range(payload)
+
+        self.assertFalse(result)
+        self.assertEqual(self.device.failures.count(), 0)
+
+    def test_ignore_empty_readings(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={},
+        )
+
+        result = check_payload_out_of_range(payload)
+
+        self.assertFalse(result)
+        self.assertEqual(self.device.failures.count(), 0)
+
+    def test_failure_includes_config_bounds(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 30.0, 'humidity': 50.0},
+        )
+
+        check_payload_out_of_range(payload)
+
+        failure = self.device.failures.get()
+        config = failure.details['config']
+        self.assertEqual(config['temp_min'], 15.0)
+        self.assertEqual(config['temp_max'], 25.0)
+        self.assertEqual(config['humidity_min'], 30.0)
+        self.assertEqual(config['humidity_max'], 70.0)
+
+    def test_failure_includes_payload_id(self):
+        payload = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            object={'temperature': 30.0, 'humidity': 50.0},
+        )
+
+        check_payload_out_of_range(payload)
+
+        failure = self.device.failures.get()
+        self.assertEqual(failure.details['payload_id'], payload.id)
