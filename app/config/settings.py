@@ -21,10 +21,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-qeff72c%4kavwjfe_%*=+^$gnpd^p6!s9im!o9hw3+edsvt=me'
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-qeff72c%4kavwjfe_%*=+^$gnpd^p6!s9im!o9hw3+edsvt=me',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# compose/.env.example pass '1'/'0'; any unrecognized value falls to False, so
+# a typo fails toward the safe (non-debug) side. Default '1' keeps dev on.
+DEBUG = os.environ.get('DJANGO_DEBUG', '1').strip().lower() in ('1', 'true', 'yes')
 
 # DEBUG=True substitutes localhost/127.0.0.1/[::1] when this is empty, but not
 # 0.0.0.0 — hence the explicit list. Trailing/padded entries are stripped so a
