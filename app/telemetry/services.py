@@ -7,8 +7,10 @@ import base64
 import datetime
 
 from django.utils.dateparse import parse_datetime
+from django.utils import timezone
+from django.db.models import Max
 
-from .models import Status
+from .models import Status, Device, DeviceFailure, DeviceHealthConfig
 
 
 def decode_payload(data_b64):
@@ -45,3 +47,59 @@ def extract_received_at(rx_info):
         # naive; assuming UTC beats Django guessing (and warning) at save time.
         parsed = parsed.replace(tzinfo=datetime.timezone.utc)
     return parsed
+
+
+def check_device_inactivity():
+    """Flag devices with no payload in configured inactivity window.
+
+    For each device:
+    1. Get or create its health config (uses defaults if missing)
+    2. Find most recent payload time
+    3. If older than inactivity_window_seconds, create inactivity failure
+    4. If recent payload exists, resolve any active inactivity failures
+
+    Idempotent: safe to call multiple times.
+    """
+    now = timezone.now()
+    flagged = []
+    resolved = []
+
+    for device in Device.objects.all():
+        config, _ = DeviceHealthConfig.objects.get_or_create(device=device)
+        window = datetime.timedelta(seconds=config.inactivity_window_seconds)
+        cutoff = now - window
+
+        last_payload_time = device.payloads.aggregate(
+            max_time=Max('created_at')
+        )['max_time']
+
+        has_active_failure = device.failures.filter(
+            failure_type='inactivity',
+            resolved_at__isnull=True
+        ).exists()
+
+        if last_payload_time is None:
+            is_inactive = True
+        else:
+            is_inactive = last_payload_time < cutoff
+
+        if is_inactive and not has_active_failure:
+            failure = DeviceFailure.objects.create(
+                device=device,
+                failure_type='inactivity',
+                details={
+                    'last_payload_time': last_payload_time.isoformat() if last_payload_time else None,
+                    'inactivity_window_seconds': config.inactivity_window_seconds,
+                    'checked_at': now.isoformat(),
+                }
+            )
+            flagged.append(failure)
+        elif not is_inactive and has_active_failure:
+            failures = device.failures.filter(
+                failure_type='inactivity',
+                resolved_at__isnull=True
+            )
+            count = failures.update(resolved_at=now)
+            resolved.extend([f for f in failures])
+
+    return {'flagged': flagged, 'resolved': resolved}

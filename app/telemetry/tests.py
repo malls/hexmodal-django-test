@@ -7,6 +7,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from .models import Device, Payload, Status, DeviceFailure, DeviceHealthConfig
+from .services import check_device_inactivity
 
 
 def example_body():
@@ -447,3 +448,130 @@ class DeviceHealthConfigTests(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, http_status.HTTP_401_UNAUTHORIZED)
+
+
+class InactivityDetectionTests(APITestCase):
+    def setUp(self):
+        self.device = Device.objects.create(dev_eui='device1')
+        self.config = DeviceHealthConfig.objects.create(
+            device=self.device,
+            inactivity_window_seconds=3600,
+        )
+
+    def test_flag_device_with_no_payloads(self):
+        result = check_device_inactivity()
+
+        self.assertEqual(len(result['flagged']), 1)
+        self.assertEqual(len(result['resolved']), 0)
+        failure = self.device.failures.get()
+        self.assertEqual(failure.failure_type, 'inactivity')
+        self.assertIsNone(failure.resolved_at)
+        self.assertIn('inactivity_window_seconds', failure.details)
+
+    def test_flag_device_with_old_payload(self):
+        old_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            seconds=7200
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=old_time,
+        )
+
+        result = check_device_inactivity()
+
+        self.assertEqual(len(result['flagged']), 1)
+        failure = self.device.failures.get()
+        self.assertEqual(failure.failure_type, 'inactivity')
+
+    def test_do_not_flag_device_with_recent_payload(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=1800),
+        )
+
+        result = check_device_inactivity()
+
+        self.assertEqual(len(result['flagged']), 0)
+        self.assertEqual(self.device.failures.count(), 0)
+
+    def test_resolve_inactivity_when_device_reports(self):
+        old_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            seconds=7200
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=old_time,
+        )
+        check_device_inactivity()
+        self.assertEqual(len(self.device.failures.filter(resolved_at__isnull=True)), 1)
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        result = check_device_inactivity()
+
+        self.assertEqual(len(result['resolved']), 1)
+        self.assertIsNotNone(self.device.failures.get().resolved_at)
+
+    def test_idempotent_no_duplicate_failures(self):
+        check_device_inactivity()
+        check_device_inactivity()
+        check_device_inactivity()
+
+        self.assertEqual(self.device.failures.count(), 1)
+
+    def test_creates_config_if_missing(self):
+        device_no_config = Device.objects.create(dev_eui='device2')
+        self.assertFalse(hasattr(device_no_config, 'health_config'))
+
+        check_device_inactivity()
+
+        self.assertTrue(DeviceHealthConfig.objects.filter(device=device_no_config).exists())
+
+    def test_uses_config_inactivity_window(self):
+        self.config.inactivity_window_seconds = 1800
+        self.config.save()
+
+        recent_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            seconds=2000
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=recent_time,
+        )
+
+        result = check_device_inactivity()
+
+        self.assertEqual(len(result['flagged']), 1)
+
+    def test_details_include_last_payload_time(self):
+        payload_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            seconds=7200
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=payload_time,
+        )
+
+        check_device_inactivity()
+
+        failure = self.device.failures.get()
+        self.assertIn('last_payload_time', failure.details)
+        self.assertIn('checked_at', failure.details)
+        self.assertIn('inactivity_window_seconds', failure.details)
