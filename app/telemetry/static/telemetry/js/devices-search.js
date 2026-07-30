@@ -125,7 +125,9 @@ async function fetchDeviceList() {
         const query = buildQueryParams();
         const url = query ? `${API_BASE}/devices/?${query}` : `${API_BASE}/devices/`;
 
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            credentials: 'include'  // Send session cookie
+        });
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -401,14 +403,18 @@ async function fetchDeviceDetail(devId) {
 
     try {
         // Fetch device
-        const deviceResp = await fetch(`${API_BASE}/devices/${devId}/`);
+        const deviceResp = await fetch(`${API_BASE}/devices/${devId}/`, {
+            credentials: 'include'
+        });
         if (!deviceResp.ok) {
             throw new Error(`Device not found (${deviceResp.status})`);
         }
         const device = await deviceResp.json();
 
         // Fetch config
-        const configResp = await fetch(`${API_BASE}/health-configs/?device_id=${devId}`);
+        const configResp = await fetch(`${API_BASE}/health-configs/?device_id=${devId}`, {
+            credentials: 'include'
+        });
         const configData = configResp.ok ? await configResp.json() : { results: [] };
         const config = configData.results?.[0];
 
