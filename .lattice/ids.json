@@ -6,10 +6,11 @@
     "HDT-4": "task_01KYRF39VADM2EBHSE14D9J62K",
     "HDT-5": "task_01KYRG1SYGPR8WAE46WD2Q4YP0",
     "HDT-6": "task_01KYRH1KNHX4WDSDBSFRBW0EQK",
-    "HDT-7": "task_01KYRH1KT3JSS95TFH008ZJDTW"
+    "HDT-7": "task_01KYRH1KT3JSS95TFH008ZJDTW",
+    "HDT-8": "task_01KYRJ6EYZ8P36F094XDYE4J6F"
   },
   "next_seqs": {
-    "HDT": 8
+    "HDT": 9
   },
   "schema_version": 2
 }

@@ -7,6 +7,8 @@
 
 Lattice is file-based, event-sourced task tracking built for minds that think in tokens and act in tool calls. The `.lattice/` directory is the coordination state — it lives alongside the code, not behind an API.
 
+**Project convention (per Forrest): always commit `.lattice/` changes along with the work.** When you commit a task's code, stage the `.lattice/` event/task/plan files in the same commit — even ones touched by unrelated sessions. Board state belongs in history next to the code it describes; do not leave lattice files uncommitted for the human to sweep up.
+
 ### Creating Tasks (Non-Negotiable)
 
 Before you plan, implement, or touch a single file — the task must exist in Lattice. This is the first thing you do when work arrives.

@@ -80,3 +80,31 @@ Or on the host (this repo's `.env` maps Postgres to host port 5433):
 ```
 cd app && POSTGRES_PORT=5433 python manage.py test telemetry
 ```
+
+## End-to-end tests
+
+Playwright API tests in `e2e/` exercise the running compose stack over real
+HTTP (real token auth, real Postgres). Prerequisite — stack up and migrated:
+
+```
+docker compose up -d && docker compose exec web python manage.py migrate
+```
+
+Install the test deps into the mise venv (no `playwright install` needed —
+the tests are API-only and use no browser):
+
+```
+pip install -r e2e/requirements.txt
+```
+
+Run from the repo root:
+
+```
+pytest e2e/ -v
+```
+
+Token provisioning is automatic: the suite creates/reuses an `e2e` user and
+its token via `docker compose exec`. Overrides:
+
+- `E2E_BASE_URL` — target base URL (default `http://localhost:8000`)
+- `E2E_TOKEN` — use this token verbatim and skip auto-provisioning
