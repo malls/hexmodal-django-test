@@ -1,3 +1,27 @@
+<!-- AI -->
+# hexmodal-django-test
+
+Django + DRF service that ingests IoT uplink payloads: token-authenticated
+POST, per-device `fCnt` duplicate rejection, base64→hex decode, and a
+passing/failing status tracked on each device.
+
+Quick start from a fresh clone:
+
+```
+cp .env.example .env        # optional — compose falls back to the same defaults
+docker compose up -d
+docker compose exec web python manage.py migrate
+```
+
+`POSTGRES_PORT` in `.env` is the host-side port Postgres is published on
+(5432 in `.env.example`). The examples below use 5433 — set that in your
+`.env` if a local Postgres already owns 5432.
+
+If compose fails with a platform mismatch ("image's platform does not match"
+or an exec format error), your shell exports a `DOCKER_DEFAULT_PLATFORM` that
+disagrees with your Docker daemon — override it in the gitignored
+`mise.local.toml`; see the comment in `mise.toml`.
+
 <!-- handwritten -->
 To start the service: 
 `docker compose up`
@@ -7,7 +31,7 @@ To set up to run django commands locally
 brew install mise
 echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
 exec zsh
-pip install django-admin
+pip install -r app/requirements.txt
 ```
 
 To view/edit project management issues:
@@ -16,7 +40,7 @@ pip install lattice-tracker
 lattice dashboard
 ```
 
-To view the local database (assuming defaults)
+To view the local database (port = `POSTGRES_PORT` from your `.env`)
 `psql postgres://hexmodal:hexmodal@localhost:5433/hexmodal`
 
 <!-- AI -->
@@ -75,7 +99,7 @@ docker compose up -d db
 docker compose run --rm web python manage.py test telemetry
 ```
 
-Or on the host (this repo's `.env` maps Postgres to host port 5433):
+Or on the host (`POSTGRES_PORT` must match your `.env` — 5433 here):
 
 ```
 cd app && POSTGRES_PORT=5433 python manage.py test telemetry
