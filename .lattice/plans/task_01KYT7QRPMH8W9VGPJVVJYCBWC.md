@@ -74,22 +74,25 @@ Build a web-based UI for searching and filtering devices by health status and fa
 ## Features
 
 ### 1. Search Box
-- Search by device dev_eui (substring match via frontend filter)
-- Real-time search as user types (no backend request needed for simple case)
+- Search by device dev_eui (substring match via API query parameter)
+- Sends API request on input change (debounced 300ms)
 - Clear button to reset search
 - Placeholder: "Search by device ID..."
+- Query param: `?search=device1`
 
 ### 2. Filter Controls
 **Status Filter** (radio or toggle)
 - All (default)
 - Passing only
 - Failing only
+- Query param: `?status=passing` or `?status=failing`
 
 **Failure Type Filter** (checkboxes)
 - [ ] Inactivity
 - [ ] Out of Range
 - [ ] Frequency Anomaly
 - "Show all" toggle to clear all
+- Query param: `?failure_type=inactivity,out_of_range` (comma-separated)
 
 ### 3. Device List Table
 **Columns:**
@@ -148,9 +151,15 @@ Build a web-based UI for searching and filtering devices by health status and fa
 ## API Integration
 
 ### Endpoints Used
-1. **List**: `GET /api/payloads/devices/?failure_type=inactivity,out_of_range`
-   - Query params: `failure_type`, `page`, `ordering`
-   - Response includes: id, dev_eui, latest_status, failure_count, updated_at
+1. **List**: `GET /api/payloads/devices/?search=dev&status=failing&failure_type=inactivity&page=2&ordering=-updated_at`
+   - Query params:
+     - `search` — substring match on dev_eui (case-insensitive)
+     - `status` — filter by latest_status: 'passing', 'failing', 'unknown'
+     - `failure_type` — comma-separated list: 'inactivity,out_of_range,frequency_anomaly'
+     - `page` — pagination (DRF default: 20 per page)
+     - `ordering` — 'dev_eui', '-dev_eui', 'latest_status', '-updated_at' (default: 'dev_eui')
+   - Response includes: count, next, previous, results: [{id, dev_eui, latest_status, failure_count, created_at, updated_at}, ...]
+   - All filtering and searching happens on database
 
 2. **Detail**: `GET /api/payloads/devices/{id}/`
    - Response includes: id, dev_eui, latest_status, created_at, updated_at, failures (with details)
@@ -199,21 +208,26 @@ Build a web-based UI for searching and filtering devices by health status and fa
 ## Client-Side Logic (JavaScript)
 
 ### Key Functions
-1. `fetchDeviceList(filters)` — GET /api/devices/ with filters
+1. `fetchDeviceList(params)` — GET /api/devices/ with query params (search, status, failure_type, page, ordering)
 2. `fetchDeviceDetail(id)` — GET /api/devices/{id}/
-3. `applyFilters()` — Update list based on filter controls
-4. `handleSearch(query)` — Filter displayed list by dev_eui
-5. `formatRelativeTime(timestamp)` — Convert to "5 min ago"
-6. `updateSortOrder(column)` — Change sort direction
-7. `navigateToDevice(id)` — Redirect to detail view
-8. `copyToClipboard(text)` — Copy device ID
+3. `applyFilters()` — Collect filter values and call fetchDeviceList()
+4. `handleSearch(query)` — Debounce search input and call fetchDeviceList() with ?search=query
+5. `handleStatusFilter(status)` — Call fetchDeviceList() with ?status=status
+6. `handleFailureTypeFilter(types)` — Call fetchDeviceList() with ?failure_type=type1,type2,type3
+7. `handleSortOrder(column)` — Call fetchDeviceList() with ?ordering=column or -column
+8. `updatePageFromURL()` — Parse URL query params and update form/table
+9. `formatRelativeTime(timestamp)` — Convert to "5 min ago"
+10. `navigateToDevice(id)` — Redirect to detail view
+11. `copyToClipboard(text)` — Copy device ID
 
 ### Features
-- Debounced search (300ms) to avoid excessive filtering
-- Pagination handled server-side (link to prev/next pages)
-- Relative time updates every 30 seconds
+- Debounced search input (300ms) before making API call
+- Debounced filter changes (300ms) before making API call
+- All pagination, sorting, filtering done server-side
+- Relative time updates every 30 seconds (client-side only)
 - Loading spinners while fetching data
 - Error messages with retry buttons
+- URL query params reflect current filters (shareable URLs)
 - No page reload on filter/search changes (AJAX)
 
 ## E2E Testing (Playwright)
@@ -304,9 +318,35 @@ async def test_search_and_filter_devices(page):
 2. ✓ Debounced search (no lag on typing)
 3. ✓ Smooth relative time updates (no jank)
 
+## API Enhancements Required (Minor Update to HDT-15)
+
+The DeviceViewSet needs these additions:
+1. **Search filter** — `?search=device1` searches dev_eui with icontains
+   ```python
+   search_fields = ['dev_eui']  # Add to viewset
+   ```
+
+2. **Status filter** — `?status=passing` filters by latest_status
+   ```python
+   def get_queryset(self):
+       queryset = super().get_queryset()
+       status = self.request.query_params.get('status')
+       if status:
+           queryset = queryset.filter(latest_status=status)
+       return queryset
+   ```
+
+3. **Ordering fields** — Already has dev_eui and updated_at; may add latest_status
+   ```python
+   ordering_fields = ['dev_eui', 'latest_status', 'updated_at']
+   ordering = ['dev_eui']  # Default
+   ```
+
+Note: `failure_type` filtering already works in HDT-15.
+
 ## Dependencies
-- Depends on: HDT-15 (Device Status API)
-- Requires: DRF API endpoints working with filters
+- Depends on: HDT-15 (Device Status API) with above enhancements
+- Requires: DRF API endpoints with search, status, and ordering filters
 - Test dependency: Playwright with Django test utilities
 
 ## Future Enhancements (Not in Scope)
