@@ -50,6 +50,9 @@ INSTALLED_APPS = [
     # DRF is the seam for the payload ingest endpoint (see PROMPT.md); the
     # endpoint itself is not built here. Already pinned in requirements.txt.
     'rest_framework',
+    # Stores DB-backed API tokens for TokenAuthentication (HDT-6). Ships its own
+    # migration; applied by the normal 'manage.py migrate', nothing generated here.
+    'rest_framework.authtoken',
     'telemetry',
 ]
 
@@ -81,6 +84,19 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+
+# REST Framework
+# Token auth + authenticated-by-default so no future view can accidentally ship
+# open. Create tokens with 'manage.py drf_create_token <username>' (see README).
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
