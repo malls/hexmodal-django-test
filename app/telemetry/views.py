@@ -1,6 +1,7 @@
 from django.db import IntegrityError, transaction
 from rest_framework import status as http_status, viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -91,7 +92,9 @@ class PayloadIngestView(APIView):
 
 class DeviceViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Device.objects.prefetch_related('failures')
-    ordering_fields = ['dev_eui', 'updated_at']
+    filter_backends = [SearchFilter]
+    search_fields = ['dev_eui']
+    ordering_fields = ['dev_eui', 'latest_status', 'updated_at']
     ordering = ['dev_eui']
 
     def get_serializer_class(self):
@@ -108,6 +111,9 @@ class DeviceViewSet(viewsets.ReadOnlyModelViewSet):
                 failures__failure_type__in=types,
                 failures__resolved_at__isnull=True
             ).distinct()
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(latest_status=status)
         return queryset
 
 
