@@ -131,3 +131,130 @@ its token via `docker compose exec`. Overrides:
 
 - `E2E_BASE_URL` — target base URL (default `http://localhost:8000`)
 - `E2E_TOKEN` — use this token verbatim and skip auto-provisioning
+
+## Device Health Monitoring
+
+Beyond basic passing/failing status, the system detects three types of device failures:
+
+### Out-of-Range Detection
+
+When a payload's temperature or humidity readings exceed configured bounds, a
+failure is recorded. Resolves automatically when readings return to normal.
+
+**Configuration:**
+- Temperature min/max (default: -10°C to 50°C)
+- Humidity min/max (default: 0% to 100%)
+
+Triggered on each payload ingest (automatic).
+
+### Inactivity Detection
+
+When a device doesn't send any payload within the configured inactivity window,
+a failure is recorded. Resolves when a payload arrives.
+
+**Configuration:**
+- `inactivity_window_seconds` (default: 3600 seconds = 1 hour)
+
+Run periodic check:
+```bash
+docker compose exec web python manage.py check_inactivity
+```
+
+Schedule this command to run every 5-10 minutes via cron, Celery, or similar.
+
+### Frequency Anomaly Detection
+
+When the gap between consecutive payloads exceeds 1.5× the expected frequency,
+a failure is recorded. Resolves when frequency improves.
+
+**Configuration:**
+- `expected_frequency_seconds` (default: 600 seconds)
+- Threshold: `expected_frequency × 1.5` (default: 900 seconds)
+
+Triggered on each payload ingest (automatic).
+
+## Health Configuration
+
+Each device has a `DeviceHealthConfig` that stores thresholds. Created automatically
+on first use with defaults; customize via:
+
+**API endpoint:**
+```
+GET/PUT /api/payloads/health-configs/?device_id=<id>
+```
+
+**Example:**
+```json
+{
+  "device": 1,
+  "inactivity_window_seconds": 3600,
+  "temp_min": -10,
+  "temp_max": 50,
+  "humidity_min": 0,
+  "humidity_max": 100,
+  "expected_frequency_seconds": 600
+}
+```
+
+**Django admin:**
+Navigate to `/admin/telemetry/devicehealthconfig/` to edit thresholds for any device.
+
+## Device Search & Filter Dashboard
+
+After logging in to the admin panel at `/admin/`, visit the device health dashboard:
+
+```
+http://localhost:8000/devices/
+```
+
+**Features:**
+- **Search** by device dev_eui (substring, case-insensitive)
+- **Filter by status** — Passing, Failing, or Unknown
+- **Filter by failure type** — Inactivity, Out of Range, or Frequency Anomaly
+- **Sort** by device ID, status, or last activity
+- **Pagination** with prev/next controls
+- **Device detail view** showing active failures and health configuration
+- **Responsive design** — works on mobile, tablet, and desktop
+- **Light/dark mode** support
+
+Click any device row to see detailed failure information and configuration.
+
+## Device Status API
+
+Query devices and failures via the API:
+
+**List devices:**
+```bash
+curl -H 'Authorization: Token <key>' \
+  'http://localhost:8000/api/payloads/devices/'
+```
+
+**Query parameters:**
+- `search=device1` — Search by dev_eui (substring)
+- `status=passing|failing|unknown` — Filter by status
+- `failure_type=inactivity,out_of_range,frequency_anomaly` — Filter by failure types (comma-separated)
+- `ordering=dev_eui|-dev_eui|latest_status|-latest_status|updated_at|-updated_at` — Sort results
+- `page=2` — Pagination (20 per page)
+
+**Examples:**
+```bash
+# All failing devices
+curl -H 'Authorization: Token <key>' \
+  'http://localhost:8000/api/payloads/devices/?status=failing'
+
+# Devices with inactivity failures
+curl -H 'Authorization: Token <key>' \
+  'http://localhost:8000/api/payloads/devices/?failure_type=inactivity'
+
+# Search and filter combined
+curl -H 'Authorization: Token <key>' \
+  'http://localhost:8000/api/payloads/devices/?search=kitchen&status=failing&failure_type=out_of_range'
+```
+
+**Device detail:**
+```bash
+curl -H 'Authorization: Token <key>' \
+  'http://localhost:8000/api/payloads/devices/<id>/'
+```
+
+Response includes active failures with details (timestamps, readings, thresholds).
