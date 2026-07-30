@@ -1,26 +1,32 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": "low",
   "created_at": "2026-07-30T03:28:16Z",
   "created_by": "agent:claude-fable-5",
   "custom_fields": {},
   "description": "Wire up DRF TokenAuthentication so the payload ingest endpoint (HDT-7) can require a token. PROMPT.md: 'There should be basic Token authentication in this payload.'\n\nScope: add 'rest_framework.authtoken' to INSTALLED_APPS, add a REST_FRAMEWORK settings dict with DEFAULT_AUTHENTICATION_CLASSES = TokenAuthentication and DEFAULT_PERMISSION_CLASSES = IsAuthenticated (secure by default \u2014 the ingest view then needs no per-view auth config), run the authtoken migration, and document token creation in README.md (manage.py drf_create_token <username>, requests send 'Authorization: Token <key>').\n\nDecision context: use DRF's built-in TokenAuthentication rather than JWT or a custom header \u2014 PROMPT.md says 'basic Token authentication' and built-in is the least surprising choice for a reviewer setting this up locally. Defaulting the whole API to IsAuthenticated is deliberate: it means a future view cannot accidentally ship unauthenticated.\n\nOut of scope: the endpoint itself (HDT-7), user/device provisioning UI, token rotation, per-device tokens.\n\nNote: HDT-5 deliberately left authtoken and the REST_FRAMEWORK dict out of settings so this task owns them.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-07-30T03:32:53Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KYRHA2AGQP80N1BD4T6VVKRZ",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
   "id": "task_01KYRH1KNHX4WDSDBSFRBW0EQK",
-  "last_event_id": "ev_01KYRH5N57QCB8J21M08CGXHFB",
-  "last_status_changed_at": "2026-07-30T03:30:29Z",
+  "last_event_id": "ev_01KYRHA2DQWGTY389FX23N7WVG",
+  "last_status_changed_at": "2026-07-30T03:32:53Z",
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "HDT-6",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "Configure DRF token authentication",
   "type": "task",
-  "updated_at": "2026-07-30T03:30:29Z",
+  "updated_at": "2026-07-30T03:32:53Z",
   "urgency": null
 }

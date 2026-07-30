@@ -1,17 +1,23 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 2,
   "complexity": "medium",
   "created_at": "2026-07-30T03:28:16Z",
   "created_by": "agent:claude-fable-5",
   "custom_fields": {},
   "description": "Implement the DRF POST endpoint from PROMPT.md that ingests an IoT payload, decodes it, dedupes it, and updates the device status. Builds on the Device/Payload models from HDT-5 and the token auth from HDT-6.\n\nRequired behavior (from PROMPT.md):\n- POST to a DRF endpoint with the payload body. Example: {\"fCnt\": 100, \"devEUI\": \"abcdabcdabcdabcd\", \"data\": \"AQ==\", \"rxInfo\": [{\"gatewayID\": \"1234123412341234\", \"name\": \"G1\", \"time\": \"2022-07-19T11:00:00\", \"rssi\": -57, \"loRaSNR\": 10}], \"txInfo\": {\"frequency\": 86810000, \"dr\": 5}}\n- fCnt is used to reject duplicate messages (scoped per device \u2014 the DB already has UniqueConstraint on (device, f_cnt)).\n- The 'data' key is base64 and must be translated to a hexadecimal value. Worked example: 'AQ==' -> bytes b'\\x01' -> hex '01' -> integer value 1.\n- If the decoded value is 1 the payload is marked passing, otherwise failing.\n- Payload connects to Device via devEUI.\n- Device keeps track of its latest status value (passing vs failing).\n\nDecisions already made (do not re-derive):\n- Wire format is camelCase, model fields are snake_case \u2014 map with serializer source= (HDT-5 established this).\n- Unknown devEUI auto-registers the Device via get_or_create rather than 404ing. An ingest endpoint that rejects unknown devices needs a provisioning flow that is not in scope; document this in the README so it can be changed.\n- Duplicate fCnt returns 409 Conflict, not a silent 200. Explicit and testable. The IntegrityError path must be handled so a concurrent double-POST cannot 500.\n- Persist the payload first, then decode/update status \u2014 models carry status default 'unknown' precisely so this ordering is possible. Keep business logic out of model save().\n- Store raw base64 in Payload.data verbatim and the hex string in Payload.decoded_hex, so the decode stays re-runnable.\n- received_at should be populated from rxInfo[0].time when present (HDT-5 left the field nullable for exactly this).\n\nAlso in scope: URL routing (config/urls.py + a telemetry urls module), serializers, tests covering the happy path / duplicate rejection / failing value / unauthenticated 401 / malformed base64, and README documentation with a working curl example.\n\nOut of scope: Celery async processing, gateway/rxInfo normalization into its own model, pagination or read endpoints beyond what is needed.",
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-07-30T03:44:06Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KYRHYJYA63KVQSK77XKP01D6",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
   "id": "task_01KYRH1KT3JSS95TFH008ZJDTW",
-  "last_event_id": "ev_01KYRH2F988822V01R344YEJK4",
-  "last_status_changed_at": "2026-07-30T03:28:16Z",
+  "last_event_id": "ev_01KYRHYK1TBTQNBMVGJ1D1X2M5",
+  "last_status_changed_at": "2026-07-30T03:44:06Z",
   "priority": "medium",
   "relationships_out": [
     {
@@ -25,10 +31,10 @@
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "HDT-7",
-  "status": "backlog",
+  "status": "done",
   "tags": null,
   "title": "Implement payload ingest endpoint with fCnt dedupe and base64 decode",
   "type": "task",
-  "updated_at": "2026-07-30T03:28:44Z",
+  "updated_at": "2026-07-30T03:44:06Z",
   "urgency": null
 }
