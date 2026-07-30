@@ -128,6 +128,17 @@ class PayloadIngestTests(APITestCase):
         self.assertEqual(Payload.objects.count(), 0)
         self.assertEqual(Device.objects.count(), 0)
 
+    def test_f_cnt_above_bigint_range_rejected(self):
+        # One past the bigint column ceiling: must be a 400 from validation,
+        # not a DataError 500 at insert time.
+        body = example_body()
+        body['fCnt'] = 2 ** 63
+        response = self.client.post(self.url, body, format='json')
+
+        self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+        self.assertIn('fCnt', response.json())
+        self.assertEqual(Payload.objects.count(), 0)
+
     def test_missing_required_fields_rejected(self):
         body = example_body()
         del body['data']

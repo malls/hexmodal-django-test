@@ -15,7 +15,12 @@ class PayloadIngestSerializer(serializers.Serializer):
     handling is the single source of truth for duplicates.
     """
 
-    fCnt = serializers.IntegerField(source='f_cnt', min_value=0)
+    # Bounds mirror the PositiveBigIntegerField column exactly: min_value=0
+    # matches its check constraint, max_value the bigint ceiling — so an
+    # absurd counter is a 400 here, not a DataError 500 at insert time.
+    fCnt = serializers.IntegerField(
+        source='f_cnt', min_value=0, max_value=9223372036854775807
+    )
     # No hex-format validation: the model left devEUI format policy open on
     # purpose, and a permissive ingest keeps working when a vendor sends
     # uppercase or otherwise nonstandard EUIs. max_length matches the column
