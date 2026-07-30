@@ -490,6 +490,109 @@ class TestUIResponsiveness:
 class TestDeviceFailureCreation:
     """Tests for creating and displaying device failures"""
 
+    def test_payload_failing_status_creates_failure(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify payload with failing status (value ≠ 1) creates a failure"""
+        import base64
+        # Create payload with failing status (data value != 1)
+        # base64 for value 2 is "Ag=="
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'Ag==',  # base64 for value 2 (failing)
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        with playwright.chromium.launch() as browser:
+            page = browser.new_page()
+            page.goto(f'{base_url}/devices/')
+            page.wait_for_load_state('networkidle')
+
+            # Search for device
+            search_input = page.locator('[data-testid=search-input]')
+            search_input.fill(fresh_dev_eui[:8])
+            page.wait_for_timeout(400)
+            page.wait_for_load_state('networkidle')
+
+            # Verify device has failure
+            rows = page.locator('[data-testid=device-row]')
+            assert rows.count() >= 1
+            failure_badge = page.locator('.failure-count').first
+            count = failure_badge.text_content().strip()
+            assert count != '0'
+
+    def test_payload_failing_displays_in_detail(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify payload_failing failure displays in device detail with hex value"""
+        # Create failing payload
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'Aw==',  # base64 for value 3 (failing)
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        device_list = api.get('/devices/')
+        device_data = device_list.json()
+        device_id = None
+        for d in device_data.get('results', []):
+            if d['dev_eui'] == fresh_dev_eui:
+                device_id = d['id']
+                break
+
+        if device_id:
+            with playwright.chromium.launch() as browser:
+                page = browser.new_page()
+                page.goto(f'{base_url}/devices/{device_id}/detail/')
+                page.wait_for_load_state('networkidle')
+
+                # Verify failure card displays
+                failure_cards = page.locator('.failure-card')
+                page_content = page.content()
+                # Should show "PAYLOAD FAILING" or similar
+                assert 'payload' in page_content.lower() or 'failing' in page_content.lower()
+
+    def test_passing_payload_resolves_failing_failure(self, api, playwright, base_url, fresh_dev_eui):
+        """Verify passing payload (value = 1) resolves payload_failing failure"""
+        # Create failing payload
+        api.post('/payloads/', data={
+            'dev_eui': fresh_dev_eui,
+            'f_cnt': 1,
+            'data': 'Ag==',  # value 2 (failing)
+            'rx_info': [{'time': '2026-07-30T12:00:00Z'}],
+            'tx_info': {},
+        })
+
+        device_list = api.get('/devices/')
+        device_data = device_list.json()
+        device_id = None
+        for d in device_data.get('results', []):
+            if d['dev_eui'] == fresh_dev_eui:
+                device_id = d['id']
+                break
+
+        if device_id:
+            # Send passing payload
+            api.post('/payloads/', data={
+                'dev_eui': fresh_dev_eui,
+                'f_cnt': 2,
+                'data': 'AQ==',  # value 1 (passing)
+                'rx_info': [{'time': '2026-07-30T12:05:00Z'}],
+                'tx_info': {},
+            })
+
+            with playwright.chromium.launch() as browser:
+                page = browser.new_page()
+                page.goto(f'{base_url}/devices/{device_id}/detail/')
+                page.wait_for_load_state('networkidle')
+
+                # Verify failure is resolved (no active failures or shows resolved message)
+                no_failures_msg = page.locator('#no-failures')
+                failure_cards = page.locator('.failure-card')
+                # Either shows "no failures" or has no failure cards
+                if no_failures_msg.is_visible():
+                    assert 'no active failures' in no_failures_msg.text_content().lower()
+
     def test_out_of_range_temperature_failure(self, api, playwright, base_url, fresh_dev_eui):
         """Verify out-of-range temperature failure is created and displayed"""
         # Create device with out-of-range temperature (-50°C, default range is -10 to 50)

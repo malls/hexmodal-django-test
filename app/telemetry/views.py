@@ -13,7 +13,7 @@ from .serializers import (
     DeviceListSerializer,
     DeviceHealthConfigSerializer,
 )
-from .services import decode_payload, extract_received_at, check_payload_out_of_range
+from .services import decode_payload, extract_received_at, check_payload_out_of_range, check_payload_failing
 
 
 class PayloadIngestView(APIView):
@@ -65,7 +65,8 @@ class PayloadIngestView(APIView):
                 # save() rather than queryset .update() so auto_now still
                 # touches updated_at.
                 device.save(update_fields=['latest_status', 'updated_at'])
-                # Check for out-of-range sensor readings
+                # Check for failures: payload failing status and sensor readings
+                check_payload_failing(payload)
                 check_payload_out_of_range(payload)
         except IntegrityError:
             return Response(

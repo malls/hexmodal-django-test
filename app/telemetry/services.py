@@ -49,6 +49,40 @@ def extract_received_at(rx_info):
     return parsed
 
 
+def check_payload_failing(payload):
+    """Flag if payload has failing status (decoded value ≠ 1).
+
+    Creates a failure when payload status is failing, resolves when
+    a passing payload arrives. Returns True if failing, False otherwise.
+    """
+    device = payload.device
+    is_failing = payload.status == Status.FAILING
+
+    has_active_failure = device.failures.filter(
+        failure_type='payload_failing',
+        resolved_at__isnull=True
+    ).exists()
+
+    if is_failing and not has_active_failure:
+        DeviceFailure.objects.create(
+            device=device,
+            failure_type='payload_failing',
+            details={
+                'payload_id': payload.id,
+                'decoded_hex': payload.decoded_hex,
+                'f_cnt': payload.f_cnt,
+                'received_at': payload.received_at.isoformat() if payload.received_at else None,
+            }
+        )
+    elif not is_failing and has_active_failure:
+        device.failures.filter(
+            failure_type='payload_failing',
+            resolved_at__isnull=True
+        ).update(resolved_at=timezone.now())
+
+    return is_failing
+
+
 def check_payload_out_of_range(payload):
     """Flag if payload readings exceed configured ranges for device.
 

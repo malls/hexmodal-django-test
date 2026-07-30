@@ -62,6 +62,7 @@ class DeviceFailure(models.Model):
     failure_type = models.CharField(
         max_length=32,
         choices=[
+            ('payload_failing', 'Payload Failing'),
             ('inactivity', 'Inactivity'),
             ('out_of_range', 'Out of Range'),
             ('frequency_anomaly', 'Frequency Anomaly'),

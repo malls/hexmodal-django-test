@@ -11,14 +11,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='device',
-            name='acceptedRanges',
-        ),
-        migrations.RemoveField(
-            model_name='device',
-            name='updateFrequencySeconds',
-        ),
         migrations.CreateModel(
             name='DeviceHealthConfig',
             fields=[

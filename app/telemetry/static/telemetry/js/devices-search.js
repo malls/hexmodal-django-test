@@ -487,7 +487,20 @@ function renderFailures(failures) {
     list.innerHTML = activeFailures.map(failure => {
         let details = '';
 
-        if (failure.failure_type === 'inactivity') {
+        if (failure.failure_type === 'payload_failing') {
+            const hex = failure.details.decoded_hex;
+            const fCnt = failure.details.f_cnt;
+            details = `
+                <div class="failure-detail-line">
+                    <span>Value:</span>
+                    <span>${hex} (not 1)</span>
+                </div>
+                <div class="failure-detail-line">
+                    <span>Frame Count:</span>
+                    <span>${fCnt}</span>
+                </div>
+            `;
+        } else if (failure.failure_type === 'inactivity') {
             const lastPayload = failure.details.last_payload_time;
             details = `
                 <div class="failure-detail-line">

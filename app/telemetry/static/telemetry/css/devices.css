@@ -615,6 +615,10 @@ body {
     border-radius: 4px;
 }
 
+.failure-card.payload_failing {
+    border-left-color: var(--color-failing);
+}
+
 .failure-card.inactivity {
     border-left-color: var(--color-badge-inactivity);
 }
@@ -635,6 +639,10 @@ body {
     font-weight: 600;
     color: white;
     margin-bottom: 0.5rem;
+}
+
+.failure-type.payload_failing {
+    background-color: var(--color-failing);
 }
 
 .failure-type.inactivity {
