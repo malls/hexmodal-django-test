@@ -26,7 +26,16 @@ SECRET_KEY = 'django-insecure-qeff72c%4kavwjfe_%*=+^$gnpd^p6!s9im!o9hw3+edsvt=me
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# DEBUG=True substitutes localhost/127.0.0.1/[::1] when this is empty, but not
+# 0.0.0.0 — hence the explicit list. Trailing/padded entries are stripped so a
+# stray comma can't produce an entry that matches no Host header.
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get(
+        'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0'
+    ).split(',')
+    if h.strip()
+]
 
 
 # Application definition
