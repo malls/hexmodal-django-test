@@ -14,8 +14,7 @@ docker compose exec web python manage.py migrate
 ```
 
 `POSTGRES_PORT` in `.env` is the host-side port Postgres is published on
-(5432 in `.env.example`). The examples below use 5433 — set that in your
-`.env` if a local Postgres already owns 5432.
+(5432 in `.env.example`).
 
 If compose fails with a platform mismatch ("image's platform does not match"
 or an exec format error), your shell exports a `DOCKER_DEFAULT_PLATFORM` that
@@ -26,7 +25,7 @@ disagrees with your Docker daemon — override it in the gitignored
 To start the service: 
 `docker compose up`
 
-To set up to run django commands locally
+To set up to run python commands locally
 ```
 brew install mise
 echo 'eval "$(mise activate zsh)"' >> ~/.zshrc
@@ -99,7 +98,7 @@ docker compose up -d db
 docker compose run --rm web python manage.py test telemetry
 ```
 
-Or on the host (`POSTGRES_PORT` must match your `.env` — 5433 here):
+Or on the host (`POSTGRES_PORT` must match your `.env` — 5432 here):
 
 ```
 cd app && POSTGRES_PORT=5433 python manage.py test telemetry

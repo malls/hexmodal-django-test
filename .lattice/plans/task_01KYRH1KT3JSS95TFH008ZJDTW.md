@@ -197,9 +197,8 @@ docker compose run --rm web python manage.py test telemetry
 ```
 
 (`docker compose exec web ...` also works when the web service is already up.)
-Running on the host instead: this repo's `.env` maps Postgres to host port
-**5433** (not the settings default 5432), so it's
-`cd app && POSTGRES_PORT=5433 python manage.py test telemetry` with the repo's
+Running on the host instead: this repo's `.env` maps Postgres to host port 5432, so it's
+`cd app && POSTGRES_PORT=5432 python manage.py test telemetry` with the repo's
 `.venv`/mise environment active. Put the compose variant in the README as the
 supported path.
 
