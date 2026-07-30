@@ -7,7 +7,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from .models import Device, Payload, Status, DeviceFailure, DeviceHealthConfig
-from .services import check_device_inactivity, check_payload_out_of_range
+from .services import check_device_inactivity, check_payload_out_of_range, check_device_frequency
 
 
 def example_body():
@@ -775,3 +775,275 @@ class OutOfRangeDetectionTests(APITestCase):
 
         failure = self.device.failures.get()
         self.assertEqual(failure.details['payload_id'], payload.id)
+
+
+class FrequencyAnomalyDetectionTests(APITestCase):
+    def setUp(self):
+        self.device = Device.objects.create(dev_eui='device1')
+        self.config = DeviceHealthConfig.objects.create(
+            device=self.device,
+            expected_frequency_seconds=600,
+        )
+
+    def test_no_flag_with_single_payload(self):
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+        )
+
+        result = check_device_frequency(self.device)
+
+        self.assertFalse(result)
+        self.assertEqual(self.device.failures.count(), 0)
+
+    def test_no_flag_with_frequent_payloads(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=300),
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        result = check_device_frequency(self.device)
+
+        self.assertFalse(result)
+        self.assertEqual(self.device.failures.count(), 0)
+
+    def test_no_flag_at_exact_frequency(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=600),
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        result = check_device_frequency(self.device)
+
+        self.assertFalse(result)
+        self.assertEqual(self.device.failures.count(), 0)
+
+    def test_flag_when_gap_exceeds_threshold(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=1000),
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        result = check_device_frequency(self.device)
+
+        self.assertTrue(result)
+        failure = self.device.failures.get()
+        self.assertEqual(failure.failure_type, 'frequency_anomaly')
+        self.assertEqual(failure.details['gap_seconds'], 1000)
+
+    def test_uses_1_5x_tolerance(self):
+        self.config.expected_frequency_seconds = 600
+        self.config.save()
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=850),
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        result = check_device_frequency(self.device)
+
+        self.assertFalse(result)
+        self.assertEqual(self.device.failures.count(), 0)
+        gap = 850
+        threshold = 600 * 1.5
+        self.assertLess(gap, threshold)
+
+    def test_flag_at_1_5x_threshold_plus_one_second(self):
+        self.config.expected_frequency_seconds = 600
+        self.config.save()
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=901),
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        result = check_device_frequency(self.device)
+
+        self.assertTrue(result)
+
+    def test_resolve_when_frequency_improves(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        p1 = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=1000),
+        )
+        p2 = Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        check_device_frequency(self.device)
+        self.assertEqual(len(self.device.failures.filter(resolved_at__isnull=True)), 1)
+
+        p3 = Payload.objects.create(
+            device=self.device,
+            f_cnt=3,
+            data='AQ==',
+            created_at=now + datetime.timedelta(seconds=300),
+        )
+
+        check_device_frequency(self.device)
+
+        failure = self.device.failures.get()
+        self.assertIsNotNone(failure.resolved_at)
+
+    def test_idempotent_no_duplicate_failures(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=1000),
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        check_device_frequency(self.device)
+        check_device_frequency(self.device)
+        check_device_frequency(self.device)
+
+        self.assertEqual(self.device.failures.count(), 1)
+
+    def test_failure_includes_gap_and_threshold(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        older = Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=1000),
+        )
+        newer = Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        check_device_frequency(self.device)
+
+        failure = self.device.failures.get()
+        self.assertEqual(failure.details['gap_seconds'], 1000)
+        self.assertEqual(failure.details['expected_frequency_seconds'], 600)
+        self.assertEqual(failure.details['threshold_seconds'], 900)
+        self.assertEqual(failure.details['older_payload_id'], older.id)
+        self.assertEqual(failure.details['newer_payload_id'], newer.id)
+
+    def test_with_custom_expected_frequency(self):
+        self.config.expected_frequency_seconds = 300
+        self.config.save()
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=500),
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        result = check_device_frequency(self.device)
+
+        self.assertTrue(result)
+        failure = self.device.failures.get()
+        self.assertEqual(failure.details['expected_frequency_seconds'], 300)
+        self.assertEqual(failure.details['threshold_seconds'], 450)
+
+    def test_independent_device_frequencies(self):
+        device2 = Device.objects.create(dev_eui='device2')
+        DeviceHealthConfig.objects.create(
+            device=device2,
+            expected_frequency_seconds=600,
+        )
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=1000),
+        )
+        Payload.objects.create(
+            device=self.device,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        Payload.objects.create(
+            device=device2,
+            f_cnt=1,
+            data='AQ==',
+            created_at=now - datetime.timedelta(seconds=300),
+        )
+        Payload.objects.create(
+            device=device2,
+            f_cnt=2,
+            data='AQ==',
+            created_at=now,
+        )
+
+        check_device_frequency(self.device)
+        check_device_frequency(device2)
+
+        self.assertEqual(self.device.failures.count(), 1)
+        self.assertEqual(device2.failures.count(), 0)

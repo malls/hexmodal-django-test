@@ -107,6 +107,57 @@ def check_payload_out_of_range(payload):
     return is_out_of_range
 
 
+def check_device_frequency(device):
+    """Flag if recent payloads indicate slower reporting frequency than expected.
+
+    Analyzes the gap between the last two payloads. If the gap exceeds
+    1.5x the configured expected_frequency_seconds, flags an anomaly.
+    The 1.5x tolerance avoids false positives from brief delays.
+
+    Returns True if frequency is anomalous, False otherwise.
+    """
+    config, _ = DeviceHealthConfig.objects.get_or_create(device=device)
+
+    recent = device.payloads.order_by('-created_at')[:2]
+    if len(recent) < 2:
+        return False
+
+    newer = recent[0]
+    older = recent[1]
+
+    gap_seconds = (newer.created_at - older.created_at).total_seconds()
+    threshold = config.expected_frequency_seconds * 1.5
+
+    is_slow = gap_seconds > threshold
+
+    has_active_failure = device.failures.filter(
+        failure_type='frequency_anomaly',
+        resolved_at__isnull=True
+    ).exists()
+
+    if is_slow and not has_active_failure:
+        DeviceFailure.objects.create(
+            device=device,
+            failure_type='frequency_anomaly',
+            details={
+                'gap_seconds': gap_seconds,
+                'expected_frequency_seconds': config.expected_frequency_seconds,
+                'threshold_seconds': threshold,
+                'older_payload_id': older.id,
+                'newer_payload_id': newer.id,
+                'older_created_at': older.created_at.isoformat(),
+                'newer_created_at': newer.created_at.isoformat(),
+            }
+        )
+    elif not is_slow and has_active_failure:
+        device.failures.filter(
+            failure_type='frequency_anomaly',
+            resolved_at__isnull=True
+        ).update(resolved_at=timezone.now())
+
+    return is_slow
+
+
 def check_device_inactivity():
     """Flag devices with no payload in configured inactivity window.
 
