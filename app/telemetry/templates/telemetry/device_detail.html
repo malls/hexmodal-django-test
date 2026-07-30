@@ -10,7 +10,7 @@
 <body>
     <div class="container">
         <header class="header">
-            <a href="{% url 'telemetry:devices-search' %}" class="back-link">← Back to Devices</a>
+            <a href="{% url 'telemetry:device-list' %}" class="back-link">← Back to Devices</a>
             <h1 id="device-title">Device</h1>
         </header>
 
@@ -23,7 +23,7 @@
 
             <div id="error" class="error hidden" role="alert">
                 <p id="error-message"></p>
-                <a href="{% url 'telemetry:devices-search' %}" class="retry-btn">Back to Devices</a>
+                <a href="{% url 'telemetry:device-list' %}" class="retry-btn">Back to Devices</a>
             </div>
 
             <!-- Device Detail Section -->
