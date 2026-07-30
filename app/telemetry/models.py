@@ -24,6 +24,7 @@ class Device(models.Model):
     # shape — into the ingest endpoint before it is written. That is a seam for
     # whoever builds the serializer.
     dev_eui = models.CharField(max_length=16, unique=True)
+    acceptedRanges = models.JSONField(default=dict, blank=True)
     latest_status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.UNKNOWN
     )
@@ -32,6 +33,32 @@ class Device(models.Model):
 
     def __str__(self):
         return self.dev_eui
+
+
+class DeviceFailure(models.Model):
+    device = models.ForeignKey(
+        'Device', on_delete=models.CASCADE, related_name='failures'
+    )
+    failure_type = models.CharField(
+        max_length=32,
+        choices=[
+            ('inactivity', 'Inactivity'),
+            ('out_of_range', 'Out of Range'),
+            ('frequency_anomaly', 'Frequency Anomaly'),
+        ],
+    )
+    detected_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ('-detected_at',)
+        indexes = [
+            models.Index(fields=('device', 'resolved_at'), name='device_failures_active_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.device.dev_eui} {self.failure_type}'
 
 
 class Payload(models.Model):
@@ -47,6 +74,7 @@ class Payload(models.Model):
     # mapping for no readability gain. Stored verbatim so the decode stays
     # re-runnable and debuggable.
     data = models.TextField()
+    object = models.JSONField(default=dict, blank=True)
     decoded_hex = models.CharField(max_length=64, blank=True, default='')
     status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.UNKNOWN

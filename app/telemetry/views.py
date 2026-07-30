@@ -1,10 +1,11 @@
 from django.db import IntegrityError, transaction
-from rest_framework import status as http_status
+from rest_framework import status as http_status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Device, Payload
-from .serializers import PayloadIngestSerializer
+from .serializers import PayloadIngestSerializer, DeviceDetailSerializer, DeviceListSerializer
 from .services import decode_payload, extract_received_at
 
 
@@ -79,3 +80,25 @@ class PayloadIngestView(APIView):
             },
             status=http_status.HTTP_201_CREATED,
         )
+
+
+class DeviceViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Device.objects.prefetch_related('failures')
+    ordering_fields = ['dev_eui', 'updated_at']
+    ordering = ['dev_eui']
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return DeviceDetailSerializer
+        return DeviceListSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        failure_types = self.request.query_params.get('failure_type')
+        if failure_types:
+            types = [t.strip() for t in failure_types.split(',')]
+            queryset = queryset.filter(
+                failures__failure_type__in=types,
+                failures__resolved_at__isnull=True
+            ).distinct()
+        return queryset

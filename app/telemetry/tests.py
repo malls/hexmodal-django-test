@@ -6,7 +6,7 @@ from rest_framework import status as http_status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
-from .models import Device, Payload, Status
+from .models import Device, Payload, Status, DeviceFailure
 
 
 def example_body():
@@ -15,6 +15,7 @@ def example_body():
         'fCnt': 100,
         'devEUI': 'abcdabcdabcdabcd',
         'data': 'AQ==',
+        "object":{"temperature": 50.5 ,"humidity": 75.0},
         'rxInfo': [
             {
                 'gatewayID': '1234123412341234',
@@ -168,3 +169,154 @@ class PayloadIngestTests(APITestCase):
         self.assertEqual(Device.objects.count(), 1)
         self.assertEqual(Payload.objects.count(), 2)
         self.assertEqual(Device.objects.get().latest_status, Status.FAILING)
+
+
+class DeviceListTests(APITestCase):
+    def setUp(self):
+        self.url = reverse('telemetry:device-list')
+        user = User.objects.create_user(username='reader', password='x')
+        token = Token.objects.create(user=user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+
+    def test_list_empty(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.assertEqual(response.json()['results'], [])
+
+    def test_list_multiple_devices(self):
+        Device.objects.create(dev_eui='device1', latest_status=Status.PASSING)
+        Device.objects.create(dev_eui='device2', latest_status=Status.FAILING)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        results = response.json()['results']
+        self.assertEqual(len(results), 2)
+        dev_euis = sorted([d['dev_eui'] for d in results])
+        self.assertEqual(dev_euis, ['device1', 'device2'])
+
+    def test_device_includes_failure_count(self):
+        device = Device.objects.create(dev_eui='device1', latest_status=Status.PASSING)
+        DeviceFailure.objects.create(device=device, failure_type='inactivity')
+        DeviceFailure.objects.create(device=device, failure_type='out_of_range')
+        response = self.client.get(self.url)
+
+        results = response.json()['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['failure_count'], 2)
+
+    def test_resolved_failures_not_counted(self):
+        device = Device.objects.create(dev_eui='device1', latest_status=Status.PASSING)
+        DeviceFailure.objects.create(device=device, failure_type='inactivity')
+        DeviceFailure.objects.create(
+            device=device,
+            failure_type='out_of_range',
+            resolved_at=datetime.datetime.now(datetime.timezone.utc),
+        )
+        response = self.client.get(self.url)
+
+        results = response.json()['results']
+        self.assertEqual(results[0]['failure_count'], 1)
+
+    def test_filter_by_failure_type(self):
+        dev1 = Device.objects.create(dev_eui='device1')
+        dev2 = Device.objects.create(dev_eui='device2')
+        dev3 = Device.objects.create(dev_eui='device3')
+
+        DeviceFailure.objects.create(device=dev1, failure_type='inactivity')
+        DeviceFailure.objects.create(device=dev2, failure_type='out_of_range')
+        DeviceFailure.objects.create(device=dev3, failure_type='frequency_anomaly')
+
+        response = self.client.get(f'{self.url}?failure_type=inactivity,out_of_range')
+
+        results = response.json()['results']
+        dev_euis = sorted([d['dev_eui'] for d in results])
+        self.assertEqual(dev_euis, ['device1', 'device2'])
+
+    def test_filter_ignores_resolved_failures(self):
+        dev1 = Device.objects.create(dev_eui='device1')
+        dev2 = Device.objects.create(dev_eui='device2')
+
+        DeviceFailure.objects.create(device=dev1, failure_type='inactivity')
+        DeviceFailure.objects.create(
+            device=dev2,
+            failure_type='inactivity',
+            resolved_at=datetime.datetime.now(datetime.timezone.utc),
+        )
+
+        response = self.client.get(f'{self.url}?failure_type=inactivity')
+
+        results = response.json()['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['dev_eui'], 'device1')
+
+    def test_unauthenticated_rejected(self):
+        self.client.credentials()
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, http_status.HTTP_401_UNAUTHORIZED)
+
+
+class DeviceDetailTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='reader', password='x')
+        token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+
+    def test_retrieve_device(self):
+        device = Device.objects.create(dev_eui='device1', latest_status=Status.PASSING)
+        url = reverse('telemetry:device-detail', kwargs={'pk': device.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data['dev_eui'], 'device1')
+        self.assertEqual(data['latest_status'], 'passing')
+
+    def test_device_detail_includes_active_failures(self):
+        device = Device.objects.create(dev_eui='device1', latest_status=Status.PASSING)
+        DeviceFailure.objects.create(
+            device=device,
+            failure_type='inactivity',
+            details={'last_seen': '2026-07-30T10:00:00Z'},
+        )
+        DeviceFailure.objects.create(
+            device=device,
+            failure_type='out_of_range',
+            details={'value': 100},
+        )
+        url = reverse('telemetry:device-detail', kwargs={'pk': device.pk})
+        response = self.client.get(url)
+
+        data = response.json()
+        self.assertEqual(len(data['failures']), 2)
+        failure_types = sorted([f['failure_type'] for f in data['failures']])
+        self.assertEqual(failure_types, ['inactivity', 'out_of_range'])
+
+    def test_device_detail_excludes_resolved_failures(self):
+        device = Device.objects.create(dev_eui='device1', latest_status=Status.PASSING)
+        DeviceFailure.objects.create(device=device, failure_type='inactivity')
+        DeviceFailure.objects.create(
+            device=device,
+            failure_type='out_of_range',
+            resolved_at=datetime.datetime.now(datetime.timezone.utc),
+        )
+        url = reverse('telemetry:device-detail', kwargs={'pk': device.pk})
+        response = self.client.get(url)
+
+        data = response.json()
+        self.assertEqual(len(data['failures']), 1)
+        self.assertEqual(data['failures'][0]['failure_type'], 'inactivity')
+
+    def test_device_detail_404_for_nonexistent(self):
+        url = reverse('telemetry:device-detail', kwargs={'pk': 9999})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, http_status.HTTP_404_NOT_FOUND)
+
+    def test_unauthenticated_rejected(self):
+        device = Device.objects.create(dev_eui='device1')
+        url = reverse('telemetry:device-detail', kwargs={'pk': device.pk})
+        self.client.credentials()
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, http_status.HTTP_401_UNAUTHORIZED)

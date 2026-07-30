@@ -11,6 +11,7 @@ def body(dev_eui, f_cnt=100, data='AQ=='):
         'fCnt': f_cnt,
         'devEUI': dev_eui,
         'data': data,
+        "object":{"temperature": 50.5 ,"humidity": 75.0},
         'rxInfo': [
             {
                 'gatewayID': '1234123412341234',
@@ -110,3 +111,26 @@ def test_f_cnt_over_bigint_is_400(api, fresh_dev_eui):
 
     assert response.status == 400
     assert 'fCnt' in response.json()
+
+# def new_payload(api, fresh_dev_eui):
+
+#     data = {
+#         'fCnt':  2**63,
+#         'devEUI': dev_eui,
+#         'data': data,
+#         'rxInfo': [
+#             {
+#                 'gatewayID': '1234123412341234',
+#                 'name': 'G1',
+#                 'time': '2022-07-19T11:00:00',
+#                 'rssi': -57,
+#                 'loRaSNR': 10,
+#             }
+#         ],
+#         'txInfo': {'frequency': 86810000, 'dr': 5},
+#     }
+
+#     response = api.post('/api/payloads/', data=body(fresh_dev_eui,))
+
+
+

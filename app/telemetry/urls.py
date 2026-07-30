@@ -1,9 +1,14 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 
-from .views import PayloadIngestView
+from .views import PayloadIngestView, DeviceViewSet
 
 app_name = 'telemetry'
 
+router = DefaultRouter()
+router.register(r'devices', DeviceViewSet, basename='device')
+
 urlpatterns = [
     path('', PayloadIngestView.as_view(), name='payload-ingest'),
+    path('', include(router.urls)),
 ]

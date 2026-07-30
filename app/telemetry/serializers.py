@@ -3,6 +3,8 @@ import binascii
 
 from rest_framework import serializers
 
+from .models import Device, DeviceFailure, Payload
+
 
 class PayloadIngestSerializer(serializers.Serializer):
     """Validates the inbound wire payload and maps camelCase to snake_case.
@@ -44,3 +46,32 @@ class PayloadIngestSerializer(serializers.Serializer):
                 'Decoded payload exceeds 32 bytes.'
             )
         return value
+
+
+class DeviceFailureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeviceFailure
+        fields = ('id', 'failure_type', 'detected_at', 'resolved_at', 'details')
+
+
+class DeviceListSerializer(serializers.ModelSerializer):
+    failure_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Device
+        fields = ('id', 'dev_eui', 'latest_status', 'created_at', 'updated_at', 'failure_count')
+
+    def get_failure_count(self, obj):
+        return obj.failures.filter(resolved_at__isnull=True).count()
+
+
+class DeviceDetailSerializer(serializers.ModelSerializer):
+    failures = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Device
+        fields = ('id', 'dev_eui', 'latest_status', 'created_at', 'updated_at', 'failures')
+
+    def get_failures(self, obj):
+        active_failures = obj.failures.filter(resolved_at__isnull=True)
+        return DeviceFailureSerializer(active_failures, many=True).data
